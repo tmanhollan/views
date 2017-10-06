@@ -435,6 +435,13 @@ class views_query {
       // just return the existing table's alias.  See
       // http://groups.drupal.org/node/11288 for details.
       //
+      // Addendum to the redundant join issue: if the only difference
+      // between the two joins is the type, which will be either
+      // INNER or LEFT, the INNER join will make the LEFT join
+      // redundant. The LEFT join may return additional rows,
+      // but with an INNER join present on the same conditions,
+      // those additional rows would be excluded.
+      //
       // This can be done safely here but not lower down in
       // queue_table(), because queue_table() is also used by
       // add_table() which requires the ability to intentionally add
@@ -454,6 +461,23 @@ class views_query {
         // In PHP 4 and 5, the == operation returns TRUE for two objects
         // if they are instances of the same class and have the same
         // attributes and values.
+        if ($queued_table['relationship'] == $relationship) {
+          // join type is either LEFT or INNER. If the two joins are equal
+          // except for the type, eliminate the redundancy by returning the
+          // INNER. Return the queued one, just as in the original redundancy
+          // optimization below this one, but if the new one is the INNER,
+          // modify the queued one to match first
+          if ($queued_table['join']->table == $join->table &&
+              $queued_table['join']->left_table == $join->left_table &&
+              $queued_table['join']->left_field == $join->left_field &&
+              $queued_table['join']->field == $join->field &&
+              $queued_table['join']->extra == $join->extra) {
+            if ($join->type == "INNER") {
+              $queued_table['join'] = $join;
+            }
+            return $queued_table['alias'];
+          }
+        }
         if ($queued_table['relationship'] == $relationship && $queued_table['join'] == $join) {
           return $queued_table['alias'];
         }
